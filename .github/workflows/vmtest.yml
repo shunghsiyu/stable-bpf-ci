@@ -31,6 +31,8 @@ jobs:
   vmtest:
     name: pahole@${{ inputs.pahole }}
     runs-on: ${{ inputs.runs_on }}
+    env:
+      KBUILD_OUTPUT: ${{ github.workspace }}/kbuild-output
     steps:
 
       - uses: actions/checkout@v4
@@ -73,14 +75,24 @@ jobs:
           patches-root: '${{ github.workspace }}/ci/diffs'
           repo-root: '.kernel'
 
+      - name: Pull cached build result
+        uses: libbpf/ci/prepare-incremental-build@v3
+        with:
+          repo-root: '.kernel'
+          base-branch: linux-${{ inputs.kernel }}.y
+          arch: ${{ inputs.arch }}
+          toolchain_full: gcc
+          kbuild-output: ${{ env.KBUILD_OUTPUT }}
+
       - name: Configure kernel build
         shell: bash
         run: |
+          mkdir -p "${KBUIDL_OUTPUT}"
           cd .kernel
           cat tools/testing/selftests/bpf/config \
-              tools/testing/selftests/bpf/config.${{ inputs.arch }} > .config
+              tools/testing/selftests/bpf/config.${{ inputs.arch }} > "${KBUIDL_OUTPUT}"/.config
           # this file might or might not exist depending on kernel version
-          cat tools/testing/selftests/bpf/config.vm >> .config || :
+          cat tools/testing/selftests/bpf/config.vm >> "${KBUIDL_OUTPUT}"/.config || :
           make olddefconfig && make prepare
           cd -
 
@@ -88,7 +100,7 @@ jobs:
         shell: bash
         run: |
           cd .kernel
-          make -j $((4*$(nproc))) all
+          make KBUILD_OUTPUT="${KBUILD_OUTPUT}" -j $((4*$(nproc))) all
           cp vmlinux ${{ github.workspace }}
           cd -
 
